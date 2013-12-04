@@ -21,14 +21,8 @@ FILE *parse_comments(FILE *is, int *c_type) {
 	int c;
 	if (*c_type == COM_SINGLE) {
 		/* single line comment */
-		while ((c = fgetc(is)) != '\n' && c != EOF);
-		if (c == '\n') {
-			/* end of comment */
-			*c_type = COM_NO;
-		} else {
-			/* non-terminating comment read */
-			*c_type = ERROR;
-		}
+		is = skip_past_newline(is);
+		*c_type = COM_NO;
 		return is;
 	} else if (*c_type == COM_MULTI) {
 		/* multi-line comment */
@@ -91,7 +85,7 @@ int parse(FILE *is, FILE *os) {
 			pos = -1;
 		} else if (curr == '#' && pos == 0) {
 			/* pre-processor line found */
-			// TODO - insert function here which skips to the next line - just like in parse_comments
+			is = skip_past_newline(is);
 		}
 		prev = curr;
 
@@ -107,5 +101,28 @@ int parse(FILE *is, FILE *os) {
 		return ERROR;
 	}
 	return !ERROR;
+}
+			
+/****************************************************************/
+
+/* skips past all characters until a newline is found, or there is no
+ * further input 
+ */
+FILE *skip_past_newline(FILE *is) {
+	while ((c = fgetc(is)) != '\n' && c != EOF);
+	return is;
+}
+
+/****************************************************************/
+
+int main(int argc, char *argv[]) {
+	FILE *f_name = fopen("test.c", "r");
+	int flag = 2;
+	char c;
+	f_name = parse_comments(f_name, &flag);
+	while ((c = fgetc(f_name)) != EOF) {
+		putchar(c);
+	}
+	return 0;
 }
 
