@@ -5,8 +5,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <string.h>
 #include <assert.h>
 
+
+#define CHAR_MAIN  4	/* number of characters in the function name, 'main' */
 
 #define INIT_ARR  81	/* initial array size */
 #define MULT_ARR   2	/* multiplication factor to increase array size */
@@ -25,6 +28,7 @@ FILE *parse_comments(FILE *is, int c_type);
 void parse(FILE *is, FILE *os);
 FILE *skip_past_newline(FILE *is);
 void parse_line(char *line, FILE *os);
+int skip_past_whitespace(char *c_arr, int i);
 char *check_alloc(char *items, int c_size, int *max_size);
 int check_end_array(char *items, int pos);	
 
@@ -77,14 +81,15 @@ void parse(FILE *is, FILE *os) {
 			/* multi-line comment found */
 			is = parse_comments(is, COM_MULTI);
 			pos -= COM_CHAR;
-		} else if (curr == '{' && count == 0) {
-			/* beginning of new block statement found and no 
-			 * nesting has occurred 
-			 */
+		} else if (curr == '{') {
+			/* beginning of new block statement found */
+			if (count == 0) {
+				/* no nesting has occurred */
+				line[pos + 1] = '\0';
+				parse_line(line, os);
+			}
 			count++;
-			line[pos + 1] = '\0';
 			pos = -1;
-			parse_line(line, os);
 		} else if (curr == '}') {
 			/* ending of a block statement found */
 			count--;
@@ -110,6 +115,7 @@ void parse(FILE *is, FILE *os) {
 		/* incorrect placement of block statements */
 		exit(EXIT_FAILURE);
 	}
+	free(line);
 }
 			
 /****************************************************************/
@@ -131,12 +137,15 @@ FILE *skip_past_newline(FILE *is) {
 void parse_line(char *line, FILE *os) {
 	int final_size = INIT_ARR;
 	char *final = malloc(final_size * sizeof(*final));
-	int i, pos;
+	char sub[CHAR_MAIN];
+	int i = 0, pos;
 	assert(final);
+
+	/* skip past whitespace */
+	i = skip_past_whitespace(line, i);
 	
-	/* TODO - double check to make sure isspace of a char doesn't cause issues */
 	/* look for a return value */
-	for (i = 0, pos = 0; line[i] != '\0' && !isspace(line[i]); 
+	for (pos = 0; line[i] != '\0' && !isspace(line[i]); 
 				i++, pos++) {
 		final[pos] = line[i];
 		final = check_alloc(final, pos, &final_size);
@@ -146,12 +155,12 @@ void parse_line(char *line, FILE *os) {
 	pos++;
 	
 	/* skip past whitespace */
-	for( ; isspace(line[i]); i++);
+	i = skip_past_whitespace(line, i);
 	if (check_end_array(line, i) == END) {
 		/* not a function definition */
 		return;
 	}
-	
+
 	/* look for the function name */
 	for ( ; check_end_array(line, i) == !END &&
 				!isspace(line[i]) && line[i] != '(';
@@ -159,14 +168,13 @@ void parse_line(char *line, FILE *os) {
 		final[pos] = line[i];
 		final = check_alloc(final, pos, &final_size);
 	}
-	if (check_end_array(line, i) == END || isspace(line[i])) {
-		/* not a function definition */
+	strncpy(sub, final + pos - CHAR_MAIN, CHAR_MAIN);
+	if (check_end_array(line, i) == END || isspace(line[i]) ||
+				strncmp(sub, "main", CHAR_MAIN) == 0) {
+		/* not a function definition, or is the main function */
 		return;
 	}
-	final[pos] = '(';
-	final = check_alloc(final, pos, &final_size);
-	pos++;
-	
+
 	/* look for the function parameters */
 	for ( ; check_end_array(line, i) == !END && line[i] != ')';
 				i++, pos++) {
@@ -186,9 +194,18 @@ void parse_line(char *line, FILE *os) {
 	final[pos] = '\0';
 	
 	/* function found, so write it */
-	fprintf(os, final);
+	fprintf(os, "%s\n", final);
 	
 	free(final);
+}
+
+/****************************************************************/
+
+/* skips past all whitespace in a character array
+ */
+int skip_past_whitespace(char *c_arr, int i) {
+	for( ; isspace(c_arr[i]) && check_end_array(c_arr, i) == !END ; i++);
+	return i;
 }
 
 /****************************************************************/
@@ -216,4 +233,12 @@ int check_end_array(char *items, int pos) {
 	return !END;
 }
 
+/****************************************************************/
+
+int main(int argc, char *argv[]) {
+	FILE *is = fopen("function_prototype_extractor.c", "r");
+	FILE *os = fopen("testo.txt", "w");
+	parse(is, os);
+	return 0;
+}
 
