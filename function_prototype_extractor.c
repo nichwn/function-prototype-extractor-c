@@ -1,4 +1,11 @@
+/* TODO - error messages 
+ * TODO - remove assert and replace with an error message
+ */
+
 #include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <assert.h>
 
 
 #define INIT_ARR  81	/* initial array size */
@@ -9,38 +16,43 @@
 #define COM_SINGLE 1	/* flag for a single line comment */
 #define COM_MULTI  2	/* flag for a multi-line comment */
 
-#define ERROR     -1	/* error code */
+#define END	   1	/* return value for a function */
 
+/****************************************************************/
+
+/* function prototypes */
+FILE *parse_comments(FILE *is, int c_type);
+void parse(FILE *is, FILE *os);
+FILE *skip_past_newline(FILE *is);
+void parse_line(char *line, FILE *os);
+char *check_alloc(char *items, int c_size, int *max_size);
+int check_end_array(char *items, int pos);	
 
 /****************************************************************/
 
 /* skips through the input file until the end of the current comment has been
  * reached, where the comment type is indicated by the value of *c_type
  */
-FILE *parse_comments(FILE *is, int *c_type) {
+FILE *parse_comments(FILE *is, int c_type) {
 	int c;
-	if (*c_type == COM_SINGLE) {
+	if (c_type == COM_SINGLE) {
 		/* single line comment */
 		is = skip_past_newline(is);
-		*c_type = COM_NO;
 		return is;
-	} else if (*c_type == COM_MULTI) {
+	} else if (c_type == COM_MULTI) {
 		/* multi-line comment */
 		while ( 1 ) {
 			while ((c = fgetc(is)) != '*' && c != EOF);
 			if (fgetc(is) == '/') {
 				/* end of comment */
-				*c_type = COM_NO;
 				return is;
 			} else if (c == EOF) {
 				/* non-terminating comment read */
-				*c_type = ERROR;
-				return is;
+				exit(EXIT_FAILURE);
 			}
 		}
 	} else {
-		*c_type = ERROR;
-		return is;
+		exit(EXIT_FAILURE);
 	}
 }
 
@@ -48,11 +60,12 @@ FILE *parse_comments(FILE *is, int *c_type) {
 
 /* parses a c file, is
  */
-int parse(FILE *is, FILE *os) {
-	char prev = '', curr;
+void parse(FILE *is, FILE *os) {
+	char prev = '\0', curr;
 	int linesize = INIT_ARR;
 	int pos = 0, count = 0;
 	char *line = malloc(linesize * sizeof(*line));
+	assert(line);
 	
 	while ((curr = fgetc(is)) != EOF) {
 		line[pos] = curr;
@@ -64,21 +77,21 @@ int parse(FILE *is, FILE *os) {
 			/* multi-line comment found */
 			is = parse_comments(is, COM_MULTI);
 			pos -= COM_CHAR;
-		} else if (curr == '{' && count = 0) {
+		} else if (curr == '{' && count == 0) {
 			/* beginning of new block statement found and no 
 			 * nesting has occurred 
 			 */
 			count++;
 			line[pos + 1] = '\0';
 			pos = -1;
-			// TODO - parse current line to determine if it's a function - then if so, outputs it
+			parse_line(line, os);
 		} else if (curr == '}') {
 			/* ending of a block statement found */
 			count--;
 			pos = -1;
 			if (count < 0) {
 				/* incorrect placement of block statements */
-				return ERROR;
+				exit(EXIT_FAILURE);
 			}
 		} else if (curr == ';') {
 			/* end of non-block statement found */
@@ -90,17 +103,13 @@ int parse(FILE *is, FILE *os) {
 		prev = curr;
 
 		pos++;
-		if (pos + 1 == linesize) {
-			/* insufficient space to store a statement */
-			linesize *= MULT_ARR;
-			realloc(line, linesize * sizeof(*line));
-		}
+		line = check_alloc(line, pos, &linesize);
+	}
 	
 	if (count != 0) {
 		/* incorrect placement of block statements */
-		return ERROR;
+		exit(EXIT_FAILURE);
 	}
-	return !ERROR;
 }
 			
 /****************************************************************/
@@ -109,20 +118,102 @@ int parse(FILE *is, FILE *os) {
  * further input 
  */
 FILE *skip_past_newline(FILE *is) {
+	char c;
 	while ((c = fgetc(is)) != '\n' && c != EOF);
 	return is;
 }
 
 /****************************************************************/
 
-int main(int argc, char *argv[]) {
-	FILE *f_name = fopen("test.c", "r");
-	int flag = 2;
-	char c;
-	f_name = parse_comments(f_name, &flag);
-	while ((c = fgetc(f_name)) != EOF) {
-		putchar(c);
+/* determines whether the string is a function definition and if so, writes a
+ * function prototype to the os
+ */
+void parse_line(char *line, FILE *os) {
+	int final_size = INIT_ARR;
+	char *final = malloc(final_size * sizeof(*final));
+	int i, pos;
+	assert(final);
+	
+	/* TODO - double check to make sure isspace of a char doesn't cause issues */
+	/* look for a return value */
+	for (i = 0, pos = 0; line[i] != '\0' && !isspace(line[i]); 
+				i++, pos++) {
+		final[pos] = line[i];
+		final = check_alloc(final, pos, &final_size);
 	}
-	return 0;
+	final[pos] = ' ';
+	final = check_alloc(final, pos, &final_size);
+	pos++;
+	
+	/* skip past whitespace */
+	for( ; isspace(line[i]); i++);
+	if (check_end_array(line, i) == END) {
+		/* not a function definition */
+		return;
+	}
+	
+	/* look for the function name */
+	for ( ; check_end_array(line, i) == !END &&
+				!isspace(line[i]) && line[i] != '(';
+				i++, pos++) {
+		final[pos] = line[i];
+		final = check_alloc(final, pos, &final_size);
+	}
+	if (check_end_array(line, i) == END || isspace(line[i])) {
+		/* not a function definition */
+		return;
+	}
+	final[pos] = '(';
+	final = check_alloc(final, pos, &final_size);
+	pos++;
+	
+	/* look for the function parameters */
+	for ( ; check_end_array(line, i) == !END && line[i] != ')';
+				i++, pos++) {
+		final[pos] = line[i];
+		final = check_alloc(final, pos, &final_size);
+	}
+	if (check_end_array(line, i) == END) {
+		/* not a function definition */
+		return;
+	}
+	final[pos] = ')';
+	final = check_alloc(final, pos, &final_size);
+	pos++;
+	final[pos] = ';';
+	final = check_alloc(final, pos, &final_size);
+	pos++;
+	final[pos] = '\0';
+	
+	/* function found, so write it */
+	fprintf(os, final);
+	
+	free(final);
 }
+
+/****************************************************************/
+
+/* checks if there's space for another character in an array, and if not,
+ * reallocates the memory
+ */
+char *check_alloc(char *items, int c_size, int *max_size) {
+	if (c_size + 1 == *max_size) {
+		*max_size *= MULT_ARR;
+		items = realloc(items, *max_size * sizeof(*items));
+		assert(items);
+	}
+	return items;
+}
+
+/****************************************************************/
+
+/* identifies whether the end of the array has been reached
+ */
+int check_end_array(char *items, int pos) {
+	if (items[pos] == '\0') {
+		return END;
+	}
+	return !END;
+}
+
 
