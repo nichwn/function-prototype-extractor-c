@@ -26,8 +26,7 @@ int skip_past_whitespace(char *c_arr, int i);
 char *check_alloc(char *items, int c_size, int *max_size);
 int check_end_array(char *items, int pos);
 void mem_chk(void *arr);
-void skip_past_char(FILE *is);
-void skip_past_str(FILE *is);
+void skip_past_char(FILE *is, char c);
 
 /****************************************************************/
 
@@ -74,17 +73,8 @@ void parse(FILE *is, FILE *os) {
 	
 	while ((curr = fgetc(is)) != EOF) {
 		line[pos] = curr;
-		/* TODO - move into function instead? */
 		if (curr == '\'' || curr == '"') {
-			if (curr == '\'') {
-				pos--;
-				/* character found */
-				skip_past_char(is);
-			} else if (curr == '\"') {
-				pos--;
-				/* string found */
-				skip_past_str(is);
-			}
+			skip_past_char(is, curr);
 		} else if (curr == '/' && prev == '/') {
 			/* single line comment found */
 			is = parse_comments(is, COM_SINGLE);
@@ -263,26 +253,19 @@ void mem_chk(void *arr) {
 
 /****************************************************************/
 
-/* skips to the end of a character
+/* skips to the next non-escaped, specified character 
+ * (note: does not check if the escape sequence is standard) 
  */
-void skip_past_char(FILE *is) {
+void skip_past_char(FILE *is, char c) {
 	int curr, count;
-	for (curr = fgetc(is), count = 0; (curr != '\'' || count % 2 != 0) && curr != EOF; curr = fgetc(is)) {
+	for (curr = fgetc(is), count = 0; (curr != c || count % 2 != 0) &&
+			curr != EOF; curr = fgetc(is)) {
 		if (curr == '\\') {
 			count ++;
 		} else {
 			count = 0;
 		}
 	}
-}
-
-/****************************************************************/
-
-/* skips to the end of a string
- */
-void skip_past_str(FILE *is) {
-	int curr;
-	for (curr = fgetc(is); curr != '"' && curr != EOF; curr = fgetc(is));
 }
 
 /****************************************************************/
