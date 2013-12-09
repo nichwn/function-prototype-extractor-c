@@ -1,12 +1,7 @@
-/* TODO - error messages 
- * TODO - remove assert and replace with an error message
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-#include <assert.h>
 
 
 #define CHAR_MAIN  4	/* number of characters in the function name, 'main' */
@@ -15,7 +10,6 @@
 #define MULT_ARR   2	/* multiplication factor to increase array size */
 #define COM_CHAR   2	/* characters required to initiate a comment */
 
-#define COM_NO     0	/* flag that indicates non-reading of a comment */
 #define COM_SINGLE 1	/* flag for a single line comment */
 #define COM_MULTI  2	/* flag for a multi-line comment */
 
@@ -30,7 +24,10 @@ FILE *skip_past_newline(FILE *is);
 void parse_line(char *line, FILE *os);
 int skip_past_whitespace(char *c_arr, int i);
 char *check_alloc(char *items, int c_size, int *max_size);
-int check_end_array(char *items, int pos);	
+int check_end_array(char *items, int pos);
+void mem_chk(void *arr);
+void skip_past_char(FILE *is);
+void skip_past_str(FILE *is);
 
 /****************************************************************/
 
@@ -52,10 +49,14 @@ FILE *parse_comments(FILE *is, int c_type) {
 				return is;
 			} else if (c == EOF) {
 				/* non-terminating comment read */
+				printf("Error in parsing a multi-line comment. "
+					"Are you sure you terminated your last "
+					"comment correctly?\n");
 				exit(EXIT_FAILURE);
 			}
 		}
 	} else {
+		printf("An error occurred.\n");
 		exit(EXIT_FAILURE);
 	}
 }
@@ -69,11 +70,22 @@ void parse(FILE *is, FILE *os) {
 	int linesize = INIT_ARR;
 	int pos = 0, count = 0;
 	char *line = malloc(linesize * sizeof(*line));
-	assert(line);
+	mem_chk(line);
 	
 	while ((curr = fgetc(is)) != EOF) {
 		line[pos] = curr;
-		if (curr == '/' && prev == '/') {
+		/* TODO - move into function instead? */
+		if (curr == '\'' || curr == '"') {
+			if (curr == '\'') {
+				pos--;
+				/* character found */
+				skip_past_char(is);
+			} else if (curr == '\"') {
+				pos--;
+				/* string found */
+				skip_past_str(is);
+			}
+		} else if (curr == '/' && prev == '/') {
 			/* single line comment found */
 			is = parse_comments(is, COM_SINGLE);
 			pos -= COM_CHAR;
@@ -96,6 +108,9 @@ void parse(FILE *is, FILE *os) {
 			pos = -1;
 			if (count < 0) {
 				/* incorrect placement of block statements */
+				printf("Error encountered. Are you sure you "
+					"didn't attempt to close a "
+					"non-existent block?\n");
 				exit(EXIT_FAILURE);
 			}
 		} else if (curr == ';') {
@@ -113,6 +128,8 @@ void parse(FILE *is, FILE *os) {
 	
 	if (count != 0) {
 		/* incorrect placement of block statements */
+		printf("Error encountered. Are you sure you terminated all of "
+			"your blocks correctly?\n");
 		exit(EXIT_FAILURE);
 	}
 	free(line);
@@ -139,7 +156,7 @@ void parse_line(char *line, FILE *os) {
 	char *final = malloc(final_size * sizeof(*final));
 	char sub[CHAR_MAIN];
 	int i = 0, pos;
-	assert(final);
+	mem_chk(final);
 
 	/* skip past whitespace */
 	i = skip_past_whitespace(line, i);
@@ -217,7 +234,7 @@ char *check_alloc(char *items, int c_size, int *max_size) {
 	if (c_size + 1 == *max_size) {
 		*max_size *= MULT_ARR;
 		items = realloc(items, *max_size * sizeof(*items));
-		assert(items);
+		mem_chk(items);
 	}
 	return items;
 }
@@ -235,9 +252,63 @@ int check_end_array(char *items, int pos) {
 
 /****************************************************************/
 
+/* checks that memory was allocated
+ */
+void mem_chk(void *arr) {
+	if (arr == NULL) {
+		printf("Failure while allocating memory.\n");
+		exit(EXIT_FAILURE);
+	}
+}
+
+/****************************************************************/
+
+/* skips to the end of a character
+ */
+void skip_past_char(FILE *is) {
+	int curr, count;
+	for (curr = fgetc(is), count = 0; (curr != '\'' || count % 2 != 0) && curr != EOF; curr = fgetc(is)) {
+		if (curr == '\\') {
+			count ++;
+		} else {
+			count = 0;
+		}
+	}
+}
+
+/****************************************************************/
+
+/* skips to the end of a string
+ */
+void skip_past_str(FILE *is) {
+	int curr;
+	for (curr = fgetc(is); curr != '"' && curr != EOF; curr = fgetc(is));
+}
+
+/****************************************************************/
+
 int main(int argc, char *argv[]) {
-	FILE *is = fopen("function_prototype_extractor.c", "r");
-	FILE *os = fopen("testo.txt", "w");
+	FILE *is = fopen(argv[1], "r"), *os;
+	if (argc < 2) {
+		/* no input file provided */
+		printf("Usage: function_prototype_extractor "
+			"<input code file name> "
+			"<output file [default = function_prototypes.txt]>\n");
+			return EXIT_FAILURE;
+	}
+	if (argc > 2) {
+		/* output file provided */
+		os = fopen(argv[2], "w");
+	} else {
+		/* no output file provided */
+		os = fopen("function_prototypes.txt", "w");
+	}
+	
+	if (is == NULL || os == NULL) {
+		/* unable to open one of the files */
+		printf("Failed to open one or more files.\n");
+		return EXIT_FAILURE;
+	}
 	parse(is, os);
 	return 0;
 }
