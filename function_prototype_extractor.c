@@ -64,6 +64,7 @@ FILE *parse_comments(FILE *is, int c_type) {
 
 /* parses a c file, is
  */
+/* TODO - fix multiple comments in a row */
 void parse(FILE *is, FILE *os) {
 	char prev = '\0', curr;
 	int linesize = INIT_ARR;
@@ -74,6 +75,7 @@ void parse(FILE *is, FILE *os) {
 	while ((curr = fgetc(is)) != EOF) {
 		line[pos] = curr;
 		if (curr == '\'' || curr == '"') {
+			/* string or character found */
 			skip_past_char(is, curr);
 		} else if (curr == '/' && prev == '/') {
 			/* single line comment found */
@@ -145,7 +147,7 @@ void parse_line(char *line, FILE *os) {
 	int final_size = INIT_ARR;
 	char *final = malloc(final_size * sizeof(*final));
 	char sub[CHAR_MAIN];
-	int i = 0, pos;
+	int i = 0, pos, para = 0;
 	mem_chk(final);
 
 	/* skip past whitespace */
@@ -167,7 +169,8 @@ void parse_line(char *line, FILE *os) {
 		/* not a function definition */
 		return;
 	}
-
+	
+	/* TODO - spaces can exist after function name -- fix */
 	/* look for the function name */
 	for ( ; check_end_array(line, i) == !END &&
 				!isspace(line[i]) && line[i] != '(';
@@ -183,8 +186,14 @@ void parse_line(char *line, FILE *os) {
 	}
 
 	/* look for the function parameters */
-	for ( ; check_end_array(line, i) == !END && line[i] != ')';
+	for ( ; check_end_array(line, i) == !END && 
+				(line[i] != ')' || para != 1);
 				i++, pos++) {
+		if (line[i] == '(') {
+			para++;
+		} else if (line[i] == ')') {
+			para--;
+		}
 		final[pos] = line[i];
 		final = check_alloc(final, pos, &final_size);
 	}
@@ -261,7 +270,7 @@ void skip_past_char(FILE *is, char c) {
 	for (curr = fgetc(is), count = 0; (curr != c || count % 2 != 0) &&
 			curr != EOF; curr = fgetc(is)) {
 		if (curr == '\\') {
-			count ++;
+			count++;
 		} else {
 			count = 0;
 		}
