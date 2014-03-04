@@ -34,7 +34,7 @@ void skip_past_char(FILE *is, char c);
  * reached, where the comment type is indicated by the value of *c_type
  */
 FILE *parse_comments(FILE *is, int c_type) {
-	int c;
+	int c, aster;
 	if (c_type == COM_SINGLE) {
 		/* single line comment */
 		is = skip_past_newline(is);
@@ -42,8 +42,10 @@ FILE *parse_comments(FILE *is, int c_type) {
 	} else if (c_type == COM_MULTI) {
 		/* multi-line comment */
 		while ( 1 ) {
-			while ((c = fgetc(is)) != '*' && c != EOF);
-			if (fgetc(is) == '/') {
+			c = fgetc(is);
+			if (c == '*') {
+				aster = 1;
+			} else if (c == '/' && aster) {
 				/* end of comment */
 				return is;
 			} else if (c == EOF) {
@@ -52,6 +54,8 @@ FILE *parse_comments(FILE *is, int c_type) {
 					"Are you sure you terminated your last "
 					"comment correctly?\n");
 				exit(EXIT_FAILURE);
+			} else {
+				aster = 0;
 			}
 		}
 	} else {
@@ -64,7 +68,6 @@ FILE *parse_comments(FILE *is, int c_type) {
 
 /* parses a c file, is
  */
-/* TODO - fix multiple comments in a row */
 void parse(FILE *is, FILE *os) {
 	char prev = '\0', curr;
 	int linesize = INIT_ARR;
@@ -80,7 +83,7 @@ void parse(FILE *is, FILE *os) {
 		} else if (curr == '/' && prev == '/') {
 			/* single line comment found */
 			is = parse_comments(is, COM_SINGLE);
-			pos -= COM_CHAR;
+			pos = -1;
 		} else if (curr == '*' && prev == '/') {
 			/* multi-line comment found */
 			is = parse_comments(is, COM_MULTI);
@@ -218,7 +221,7 @@ void parse_line(char *line, FILE *os) {
 /* skips past all whitespace in a character array
  */
 int skip_past_whitespace(char *c_arr, int i) {
-	for( ; isspace(c_arr[i]) && check_end_array(c_arr, i) == !END ; i++);
+	for( ; isspace(c_arr[i]) && check_end_array(c_arr, i) == !END; i++);
 	return i;
 }
 
