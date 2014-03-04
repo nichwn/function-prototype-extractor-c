@@ -170,16 +170,14 @@ void parse_line(char *line, FILE *os) {
 		return;
 	}
 	
-	/* TODO - spaces can exist after function name -- fix */
 	/* look for the function name */
-	for ( ; check_end_array(line, i) == !END &&
-				!isspace(line[i]) && line[i] != '(';
+	for ( ; check_end_array(line, i) == !END && line[i] != '(';
 				i++, pos++) {
 		final[pos] = line[i];
 		final = check_alloc(final, pos, &final_size);
 	}
 	strncpy(sub, final + pos - CHAR_MAIN, CHAR_MAIN);
-	if (check_end_array(line, i) == END || isspace(line[i]) ||
+	if (check_end_array(line, i) == END ||
 				strncmp(sub, "main", CHAR_MAIN) == 0) {
 		/* not a function definition, or is the main function */
 		return;
