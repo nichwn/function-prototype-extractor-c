@@ -19,9 +19,9 @@
 
 /* function prototypes */
 FILE *parse_comments(FILE *is, int c_type);
-void parse(FILE *is, FILE *os);
+void parse(FILE *is);
 FILE *skip_past_newline(FILE *is);
-void parse_line(char *line, FILE *os);
+void parse_line(char *line);
 int skip_past_whitespace(char *c_arr, int i);
 char *check_alloc(char *items, int c_size, int *max_size);
 int check_end_array(char *items, int pos);
@@ -50,16 +50,17 @@ FILE *parse_comments(FILE *is, int c_type) {
 				return is;
 			} else if (c == EOF) {
 				/* non-terminating comment read */
-				printf("Error in parsing a multi-line comment. "
-					"Are you sure you terminated your last "
-					"comment correctly?\n");
+				fprintf(stderr, "Error in parsing a multi-line "
+					        "comment. Are you sure you "
+					        "terminated your last comment "
+					        "correctly?\n");
 				exit(EXIT_FAILURE);
 			} else {
 				aster = 0;
 			}
 		}
 	} else {
-		printf("An error occurred.\n");
+		fprintf(stderr, "An error occurred.\n");
 		exit(EXIT_FAILURE);
 	}
 }
@@ -68,7 +69,7 @@ FILE *parse_comments(FILE *is, int c_type) {
 
 /* parses a c file, is
  */
-void parse(FILE *is, FILE *os) {
+void parse(FILE *is) {
 	char prev = '\0', curr;
 	int linesize = INIT_ARR;
 	int pos = 0, count = 0;
@@ -93,7 +94,7 @@ void parse(FILE *is, FILE *os) {
 			if (count == 0) {
 				/* no nesting has occurred */
 				line[pos + 1] = '\0';
-				parse_line(line, os);
+				parse_line(line);
 			}
 			count++;
 			pos = -1;
@@ -103,9 +104,10 @@ void parse(FILE *is, FILE *os) {
 			pos = -1;
 			if (count < 0) {
 				/* incorrect placement of block statements */
-				printf("Error encountered. Are you sure you "
-					"didn't attempt to close a "
-					"non-existent block?\n");
+				fprintf(stderr, "Error encountered. Are you "
+					        "sure you didn't attempt to "
+					        "close a non-existent "
+					        "block?\n");
 				exit(EXIT_FAILURE);
 			}
 		} else if (curr == ';') {
@@ -123,8 +125,8 @@ void parse(FILE *is, FILE *os) {
 	
 	if (count != 0) {
 		/* incorrect placement of block statements */
-		printf("Error encountered. Are you sure you terminated all of "
-			"your blocks correctly?\n");
+		fprintf(stderr, "Error encountered. Are you sure you terminated "
+			        "all of your blocks correctly?\n");
 		exit(EXIT_FAILURE);
 	}
 	free(line);
@@ -144,9 +146,9 @@ FILE *skip_past_newline(FILE *is) {
 /****************************************************************/
 
 /* determines whether the string is a function definition and if so, writes a
- * function prototype to the os
+ * function prototype to stdout
  */
-void parse_line(char *line, FILE *os) {
+void parse_line(char *line) {
 	int final_size = INIT_ARR;
 	char *final = malloc(final_size * sizeof(*final));
 	char sub[CHAR_MAIN];
@@ -211,7 +213,7 @@ void parse_line(char *line, FILE *os) {
 	final[pos] = '\0';
 	
 	/* function found, so write it */
-	fprintf(os, "%s\n", final);
+	printf("%s\n", final);
 	
 	free(final);
 }
@@ -256,7 +258,7 @@ int check_end_array(char *items, int pos) {
  */
 void mem_chk(void *arr) {
 	if (arr == NULL) {
-		printf("Failure while allocating memory.\n");
+		fprintf(stderr, "Failure while allocating memory.\n");
 		exit(EXIT_FAILURE);
 	}
 }
@@ -281,28 +283,21 @@ void skip_past_char(FILE *is, char c) {
 /****************************************************************/
 
 int main(int argc, char *argv[]) {
-	FILE *is = fopen(argv[1], "r"), *os;
+	FILE *is = fopen(argv[1], "r");
 	if (argc < 2) {
 		/* no input file provided */
-		printf("Usage: function_prototype_extractor "
+		fprintf(stderr, "Usage: function_prototype_extractor "
 			"<input code file name> "
 			"<output file [default = function_prototypes.txt]>\n");
 			return EXIT_FAILURE;
 	}
-	if (argc > 2) {
-		/* output file provided */
-		os = fopen(argv[2], "w");
-	} else {
-		/* no output file provided */
-		os = fopen("function_prototypes.txt", "w");
-	}
-	
-	if (is == NULL || os == NULL) {
-		/* unable to open one of the files */
-		printf("Failed to open one or more files.\n");
+
+	if (is == NULL) {
+		/* unable to open the file */
+		fprintf(stderr, "Failed to open one or more files.\n");
 		return EXIT_FAILURE;
 	}
-	parse(is, os);
+	parse(is);
 	return 0;
 }
 
